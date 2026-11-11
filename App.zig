@@ -8,9 +8,12 @@ const std = @import("std");
 const kosm = @import("kosm");
 
 /// Where qt5ct's scheme and config are. null: qt5ct is left alone.
-qt5ct: ?Program = .{ .scheme = "~/.config/qt5ct/colors/kosm.conf", .config = "~/.config/qt5ct/qt5ct.conf" },
+qt5ct: ?Program = .{ .scheme = "~/.config/qt5ct/colors/{name}.conf", .config = "~/.config/qt5ct/qt5ct.conf" },
 /// Where qt6ct's scheme and config are. null: qt6ct is left alone.
-qt6ct: ?Program = .{ .scheme = "~/.config/qt6ct/colors/kosm.conf", .config = "~/.config/qt6ct/qt6ct.conf" },
+qt6ct: ?Program = .{ .scheme = "~/.config/qt6ct/colors/{name}.conf", .config = "~/.config/qt6ct/qt6ct.conf" },
+/// How `{name}` in each scheme is filled: `kosm`, or the kosmos' name. Default: the theme's
+/// `files`.
+files: kosm.Theme.Files = .shared,
 /// Colors of the focused window.
 active: Palette = .{},
 /// Colors of unfocused windows. null: the same as `active`.
@@ -23,7 +26,8 @@ pub const Palette = @import("Palette.zig");
 
 /// One of qt5ct and qt6ct.
 pub const Program = struct {
-    /// The scheme file kosm owns.
+    /// The scheme file kosm owns, listed in the program by its file name; `{name}` is filled as
+    /// the app's `files` says.
     scheme: []const u8,
     /// The program's config, where the app sets `[Appearance]`'s `color_scheme_path` to the
     /// scheme and `custom_palette` to true; both keys must be there already, as the program
@@ -68,7 +72,7 @@ pub fn from(theme: kosm.Theme) App {
     inline for (.{ "window_text", "text", "bright_text", "button_text", "highlighted_text", "tool_tip_text" }) |role| {
         @field(disabled, role) = variations.state.disabled.apply(@field(active, role).?);
     }
-    return .{ .active = active, .disabled = disabled };
+    return .{ .files = theme.files, .active = active, .disabled = disabled };
 }
 
 /// The roles Qt 5 knows: every `Palette` field but `accent`.
@@ -81,6 +85,7 @@ pub fn apply(self: App, output: *kosm.Output) !void {
 }
 
 fn write(self: App, output: *kosm.Output, program: Program, with_accent: bool) !void {
+    const scheme = try output.namedFile(program.scheme, self.files);
     const groups = [_]struct { []const u8, Palette }{
         .{ "active_colors", self.active },
         .{ "inactive_colors", self.inactive orelse self.active },
@@ -88,14 +93,14 @@ fn write(self: App, output: *kosm.Output, program: Program, with_accent: bool) !
     };
     var entries: [groups.len]kosm.Value.Entry = undefined;
     for (groups, &entries) |group, *entry| {
-        entry.* = .{ .key = group[0], .value = try colorList(output, program.scheme, group[0], group[1], with_accent) };
+        entry.* = .{ .key = group[0], .value = try colorList(output, scheme, group[0], group[1], with_accent) };
     }
-    try output.generate(.{ .file = program.scheme, .lang = "qt" }, kosm.Value{ .table = &.{
+    try output.generate(.{ .file = scheme, .lang = "qt" }, kosm.Value{ .table = &.{
         .{ .key = "ColorScheme", .value = .{ .table = &entries } },
     } });
     const config = program.config orelse return;
     var settings = try output.edit(.{ .files = config, .lang = "qt" });
-    try settings.set("Appearance.color_scheme_path", try absolute(output, program.scheme));
+    try settings.set("Appearance.color_scheme_path", try absolute(output, scheme));
     try settings.set("Appearance.custom_palette", true);
 }
 
@@ -150,6 +155,7 @@ const Fixture = struct {
             .diagnostics = &fixture.diagnostics,
             .warnings = &fixture.warnings,
             .app = "qtct",
+            .kosmos = "krystallos.dark",
         };
     }
 
@@ -239,4 +245,19 @@ test "a role left null fails naming the group and role, and nothing is written" 
     try testing.expectEqualStrings("disabled_colors: role 'shadow' is null, but Qt needs every role in order", fixture.diagnostics.message());
     try testing.expectEqualStrings("~/.config/qt5ct/colors/kosm.conf", fixture.diagnostics.file);
     try testing.expect(!fixture.plan.hasChanges());
+}
+
+test "per kosmos, each scheme is named after the kosmos and selected by that path" {
+    var fixture: Fixture = undefined;
+    try fixture.init(qt6ct_conf);
+    defer fixture.deinit();
+    var theme = test_theme;
+    theme.files = .per_kosmos;
+    var app = from(theme);
+    app.qt5ct.?.config = null;
+    try app.apply(&fixture.output);
+
+    try testing.expect(std.mem.startsWith(u8, fixture.planned("~/.config/qt5ct/colors/krystallos.dark.conf"), "[ColorScheme]\n"));
+    const expected_path = try std.fmt.allocPrint(fixture.arena.allocator(), "color_scheme_path={s}/.config/qt6ct/colors/krystallos.dark.conf\n", .{fixture.output.home});
+    try testing.expect(std.mem.indexOf(u8, fixture.planned("~/.config/qt6ct/qt6ct.conf"), expected_path) != null);
 }
