@@ -35,14 +35,13 @@ pub const Program = struct {
     config: ?[]const u8,
 };
 
-/// Colors from the theme: windows and inputs from black (white in light mode), bevels from
-/// its lightness steps, text from white, selections from the theme's `state.selected` and
-/// links and the accent cyan. Disabled text takes the theme's `state.disabled`.
+/// Colors from the theme: windows and inputs from the background role, bevels from its
+/// lightness steps, text from the foreground role, selections from the theme's `state.selected`,
+/// links from the link role and the accent from the accent role. Disabled text takes the theme's `state.disabled`.
 pub fn from(theme: kosm.Theme) App {
-    const palette = theme.palette;
     const variations = theme.variations;
-    const foreground = if (theme.mode == .dark) palette.white else palette.black;
-    const background = if (theme.mode == .dark) palette.black else palette.white;
+    const foreground = theme.roles.foreground;
+    const background = theme.roles.background;
     const button = variations.surface.raised.apply(background);
     const active: Palette = .{
         .window_text = foreground,
@@ -59,14 +58,14 @@ pub fn from(theme: kosm.Theme) App {
         .shadow = variations.surface.shadow.apply(background),
         .highlight = variations.state.selected.apply(background),
         .highlighted_text = variations.emphasis.strong.apply(foreground),
-        .link = palette.cyan,
-        .link_visited = variations.state.visited.apply(palette.cyan),
+        .link = theme.roles.link,
+        .link_visited = variations.state.visited.apply(theme.roles.link),
         .alternate_base = variations.surface.sunken.apply(background),
         .no_role = background,
         .tool_tip_base = variations.surface.overlay.apply(background),
         .tool_tip_text = foreground,
         .placeholder_text = variations.state.placeholder.apply(foreground),
-        .accent = palette.cyan,
+        .accent = theme.roles.accent,
     };
     var disabled = active;
     inline for (.{ "window_text", "text", "bright_text", "button_text", "highlighted_text", "tool_tip_text" }) |role| {
@@ -204,7 +203,7 @@ fn roles(allocator: std.mem.Allocator, scheme: []const u8, group: []const u8) ![
     return error.TestUnexpectedResult;
 }
 
-const test_theme = kosm.Theme.from(.{ .black = kosm.hex("041c26"), .white = kosm.hex("a3c5cc"), .cyan = kosm.hex("2d8699") }, .dark);
+const test_theme = kosm.Theme.from(.{ .palette = .{ .black = kosm.hex("041c26"), .white = kosm.hex("a3c5cc"), .cyan = kosm.hex("2d8699") }, .mode = .dark });
 
 test "each program gets every role in Qt's order, qt6ct the accent too, and its config selects the scheme" {
     var fixture: Fixture = undefined;

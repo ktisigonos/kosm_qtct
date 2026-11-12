@@ -16,9 +16,9 @@ so each kosmos applied keeps its own.
 A scheme holds three color groups (active, inactive, disabled), each a color for every
 `QPalette` role in Qt's order. qt6ct also gets Qt 6.6's `accent` when it is set.
 
-`from(theme)` sets windows and inputs from black (white in light mode), bevels from its
-lightness steps, text from white, selections from the theme's `state.selected`, and links and
-the accent cyan. Disabled text takes the theme's `state.disabled`; inactive windows look like
+`from(theme)` sets windows and inputs from the theme's background role, bevels from its
+lightness steps, text from the foreground role, selections from the theme's `state.selected`,
+links from the link role and the accent from the accent role. Disabled text takes the theme's `state.disabled`; inactive windows look like
 active ones.
 
 ## Fields
